@@ -55,6 +55,7 @@ public:
     std::vector<int> ret;
     for (int l : lits_) {
       if (l == lit) {
+        assert(solver.val_analyze(l) == 0);
         continue;
       }
       ret.push_back(-l);
