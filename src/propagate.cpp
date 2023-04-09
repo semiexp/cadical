@@ -396,6 +396,7 @@ bool Internal::propagate () {
     // We note that the decided literal is `-lit`, not `lit`
     ExtWatches& ext_ws = ext_watches (-lit);
     for (ExtraConstraint* ext : ext_ws) {
+      undos.push({ext, -lit});
       if (!ext->propagate(*this, -lit)) {
         // conflict detected
         ext_conflict = ext;

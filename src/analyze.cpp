@@ -710,11 +710,19 @@ void Internal::analyze () {
 
   for (;;) {
     // TODO: for analyzing extra constraints, we have to do "undo" during the trail traversal
+    analyze_progress = i;
     analyze_reason (uip, reason, ext_reason, open);
     uip = 0;
     while (!uip) {
       assert (i > 0);
       const int lit = trail[--i];
+
+      // TODO: same as in `unassign`
+      while (!undos.empty() && undos.top().second == lit) {
+        undos.top().first->undo(*this, lit);
+        undos.pop();
+      }
+
       if (!flags (lit).seen) continue;
       if (var (lit).level == level) uip = lit;
     }

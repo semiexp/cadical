@@ -22,6 +22,11 @@ public:
   }
 
   bool propagate(Internal& solver, int lit) override {
+    for (int l : assignment_stack_) {
+      assert(l != lit);
+    }
+    assignment_stack_.push_back(lit);
+
     int undet_lit = 0;
     for (int l : lits_) {
       signed char b = solver.val(l);
@@ -53,15 +58,22 @@ public:
         continue;
       }
       ret.push_back(-l);
+      assert(solver.val_analyze(l) == -1);
     }
     return ret;
   }
 
-  void undo(Internal&, int) override {}  // nothing to do
+  void undo(Internal&, int lit) override {
+    assert(!assignment_stack_.empty());
+    assert(assignment_stack_.back() == lit);
+    assignment_stack_.pop_back();
+  }
 
 private:
   std::vector<int> elits_;
   std::vector<int> lits_;
+
+  std::vector<int> assignment_stack_;  // for debug
 };
 
 }

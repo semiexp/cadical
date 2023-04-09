@@ -33,6 +33,7 @@ extern "C" {
 #include <algorithm>
 #include <memory>
 #include <queue>
+#include <stack>
 #include <string>
 #include <vector>
 
@@ -201,7 +202,9 @@ struct Internal {
   vector<int> shrinkable;       // removable or poison in 'shrink'
   Reap reap;                    // radix heap for shrink
 
+  std::stack<std::pair<ExtraConstraint*, int>> undos;        // pending undos (constraint, lit)
   std::vector<std::unique_ptr<ExtraConstraint>> ext_constr;  // extra constraints
+  int analyze_progress;                                      // current index in trail during analyze
 
   vector<int> probes;           // remaining scheduled probes
   vector<Level> control;        // 'level + 1 == control.size ()'
@@ -1073,6 +1076,20 @@ struct Internal {
     assert (lit);
     assert (lit <= max_var);
     return vals[lit];
+  }
+
+  // During analysis, extra constraints should use this to get values of
+  // literals, instead of `val`.
+  signed char val_analyze (int lit) {
+    assert (-max_var <= lit);
+    assert (lit);
+    assert (lit <= max_var);
+
+    if (var (lit).trail < analyze_progress) {
+      return val(lit);
+    } else {
+      return 0;
+    }
   }
 
   // As 'val' but restricted to the root-level value of a literal.

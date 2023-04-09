@@ -12,6 +12,10 @@ inline void Internal::unassign (int lit) {
   const int idx = vidx (lit);
   vals[idx] = 0;
   vals[-idx] = 0;
+  while (!undos.empty() && undos.top().second == lit) {
+    undos.top().first->undo(*this, lit);
+    undos.pop();
+  }
   LOG ("unassign %d @ %d", lit, var (idx).level);
 
   // In the standard EVSIDS variable decision heuristic of MiniSAT, we need
@@ -82,33 +86,44 @@ void Internal::backtrack (int new_level) {
   LOG ("backtracking to decision level %d with decision %d and trail %zd",
     new_level, control[new_level].decision, assigned);
 
-  const size_t end_of_trail = trail.size ();
-  size_t i = assigned, j = i;
-
   int reassigned = 0, unassigned = 0;
 
-  while (i < end_of_trail) {
-    int lit = trail[i++];
-    Var & v = var (lit);
-    if (v.level > new_level) {
+  if (opts.chrono) {
+    const size_t end_of_trail = trail.size ();
+    size_t i = assigned, j = i;
+
+    while (i < end_of_trail) {
+      int lit = trail[i++];
+      Var & v = var (lit);
+      if (v.level > new_level) {
+        unassign (lit);
+        unassigned++;
+      } else {
+        // This is the essence of the SAT'18 paper on chronological
+        // backtracking.  It is possible to just keep out-of-order assigned
+        // literals on the trail without breaking the solver (after some
+        // modifications to 'analyze' - see 'opts.chrono' guarded code there).
+        assert (opts.chrono);
+  #ifdef LOGGING
+        if (!v.level) LOG ("reassign %d @ 0 unit clause %d", lit, lit);
+        else LOG (v.reason, "reassign %d @ %d", lit, v.level);
+  #endif
+        trail[j] = lit;
+        v.trail = j++;
+        reassigned++;
+      }
+    }
+    trail.resize (j);
+  } else {
+    while (trail.size() > assigned) {
+      int lit = trail.back();
+      trail.pop_back();
+
+      assert(var(lit).level > new_level);
       unassign (lit);
       unassigned++;
-    } else {
-      // This is the essence of the SAT'18 paper on chronological
-      // backtracking.  It is possible to just keep out-of-order assigned
-      // literals on the trail without breaking the solver (after some
-      // modifications to 'analyze' - see 'opts.chrono' guarded code there).
-      assert (opts.chrono);
-#ifdef LOGGING
-      if (!v.level) LOG ("reassign %d @ 0 unit clause %d", lit, lit);
-      else LOG (v.reason, "reassign %d @ %d", lit, v.level);
-#endif
-      trail[j] = lit;
-      v.trail = j++;
-      reassigned++;
     }
   }
-  trail.resize (j);
   LOG ("unassigned %d literals %.0f%%",
     unassigned, percent (unassigned, unassigned + reassigned));
   LOG ("reassigned %d literals %.0f%%",
