@@ -217,6 +217,12 @@ namespace CaDiCaL {
 
     assert(f.shrinkable);
     assert(v.level == blevel);
+
+    if (v.ext_reason) {
+      failed_ptr = true;
+      return open;
+    }
+
     assert(v.reason);
 
     if (resolve_large_clauses || v.reason->size == 2)

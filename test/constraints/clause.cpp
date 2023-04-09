@@ -1,6 +1,9 @@
 #include "../../src/cadical.hpp"
 #include "../../src/extra_constraint.hpp"
 
+#include <set>
+#include <random>
+
 namespace CaDiCaL {
 
 // An implementation of clauses based on `ExtraConstraint` framework.
@@ -92,6 +95,44 @@ void run_check(const std::vector<std::vector<int>>& clauses, bool is_sat) {
   }
 }
 
+void compare_large_sat(int seed, int nvar) {
+  std::mt19937 rng(seed);
+
+  CaDiCaL::Solver solver;
+  CaDiCaL::Solver ext_solver;
+  ext_solver.set("chrono", 0);
+
+  for (;;) {
+    std::set<int> vars;
+    int clause_size = std::uniform_int_distribution<int>(2, 5)(rng);
+    while ((int)vars.size() < clause_size) {
+      int v = std::uniform_int_distribution<int>(1, nvar)(rng);
+      vars.insert(v);
+    }
+
+    std::vector<int> clause;
+    for (int v : vars) {
+      int sign = std::uniform_int_distribution<int>(0, 1)(rng) * 2 - 1;
+      clause.push_back(v * sign);
+    }
+
+    for (int lit : clause) {
+      solver.add(lit);
+    }
+    solver.add(0);
+    int res_solver = solver.solve();
+    assert(res_solver == 10 || res_solver == 20);
+
+    ext_solver.add_extra(std::make_unique<CaDiCaL::ExtClause>(clause));
+    int res_ext_solver = ext_solver.solve();
+    assert(res_solver == res_ext_solver);
+
+    if (res_solver == 20) {
+      break;
+    }
+  }
+}
+
 }
 
 int main() {
@@ -176,6 +217,12 @@ int main() {
 
   instance_3sat.pop_back();
   run_check(instance_3sat, true);
+
+  for (int seed : {37, 42, 100}) {
+    for (int nvar : {20, 50, 100, 200}) {
+      compare_large_sat(seed, nvar);
+    }
+  }
 
   return 0; 
 }

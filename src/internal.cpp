@@ -25,6 +25,7 @@ Internal::Internal ()
   score_inc (1.0),
   scores (this),
   conflict (0),
+  ext_conflict (0),
   ignore (0),
   propagated (0),
   propagated2 (0),
