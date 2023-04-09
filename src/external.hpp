@@ -255,6 +255,8 @@ struct External {
   void assume (int elit);
   int solve (bool preprocess_only);
 
+  void add_extra (std::unique_ptr<ExtraConstraint>&& constr);
+
   // We call it 'ival' as abbreviation for 'val' with 'int' return type to
   // avoid bugs due to using 'signed char tmp = val (lit)', which might turn
   // a negative value into a positive one (happened in 'extend').

@@ -29,6 +29,7 @@ struct Watch {
 };
 
 typedef vector<Watch> Watches;          // of one literal
+typedef vector<ExtraConstraint*> ExtWatches;  // of one literal
 
 typedef Watches::iterator watch_iterator;
 typedef Watches::const_iterator const_watch_iterator;

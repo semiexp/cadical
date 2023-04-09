@@ -215,7 +215,7 @@ int Internal::positive_horn_satisfiable () {
     return unlucky (0);
   }
   VERBOSE (1, "clauses are positive horn satisfied");
-  assert (!conflict);
+  assert (!conflict && !ext_conflict);
   assert (satisfied ());
   stats.lucky.horn.positive++;
   return 10;
@@ -262,7 +262,7 @@ int Internal::negative_horn_satisfiable () {
     return unlucky (0);
   }
   VERBOSE (1, "clauses are negative horn satisfied");
-  assert (!conflict);
+  assert (!conflict && !ext_conflict);
   assert (satisfied ());
   stats.lucky.horn.negative++;
   return 10;
@@ -279,6 +279,9 @@ int Internal::lucky_phases () {
   // assumptions, but this is not completely implemented nor tested yet.
   // Nothing done for constraint either.
   if (!assumptions.empty () || !constraint.empty ()) return 0;
+
+  // TODO: same for extra constraints
+  if (!ext_constr.empty ()) return 0;
 
   START (search);
   START (lucky);

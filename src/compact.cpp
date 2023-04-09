@@ -11,6 +11,9 @@ namespace CaDiCaL {
 /*------------------------------------------------------------------------*/
 
 bool Internal::compacting () {
+  // TODO: understand compacting and support it when extra constraints exist
+  if (!ext_constr.empty()) return false;
+
   if (level) return false;
   if (!opts.compact) return false;
   if (stats.conflicts < lim.compact) return false;
@@ -164,7 +167,7 @@ void Internal::compact () {
 
   assert (!level);
   assert (!unsat);
-  assert (!conflict);
+  assert (!conflict && !ext_conflict);
   assert (clause.empty ());
   assert (levels.empty ());
   assert (analyzed.empty ());
@@ -355,6 +358,7 @@ void Internal::compact () {
   mapper.map_vector (vtab);
   if (!ntab.empty ()) mapper.map2_vector (ntab);
   if (!wtab.empty ()) mapper.map2_vector (wtab);
+  if (!wtab_ext.empty ()) mapper.map2_vector (wtab_ext);
   if (!otab.empty ()) mapper.map2_vector (otab);
   if (!big.empty ()) mapper.map2_vector (big);
 

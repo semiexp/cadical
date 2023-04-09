@@ -245,12 +245,20 @@ Internal::analyze_literal (int lit, int & open) {
 }
 
 inline void
-Internal::analyze_reason (int lit, Clause * reason, int & open) {
-  assert (reason);
-  bump_clause (reason);
-  for (const auto & other : *reason)
-    if (other != lit)
-      analyze_literal (other, open);
+Internal::analyze_reason (int lit, Clause * reason, ExtraConstraint * ext_reason, int & open) {
+  assert(reason || ext_reason);
+
+  if (!reason) {
+    std::vector<int> reason_lits = ext_reason->calc_reason(*this, lit);
+    for (int other : reason_lits)
+      if (other != lit)
+        analyze_literal (-other, open);
+  } else {
+    bump_clause (reason);
+    for (const auto & other : *reason)
+      if (other != lit)
+        analyze_literal (other, open);
+  }
 }
 
 /*------------------------------------------------------------------------*/
@@ -608,7 +616,7 @@ void Internal::analyze () {
 
   START (analyze);
 
-  assert (conflict);
+  assert (conflict || ext_conflict);
 
   // First update moving averages of trail height at conflict.
   //
@@ -691,6 +699,7 @@ void Internal::analyze () {
   // articulation points is not necessary.
   //
   Clause * reason = conflict;
+  ExtraConstraint * ext_reason = ext_conflict;
   LOG (reason, "analyzing conflict");
 
   assert (clause.empty ());
@@ -700,7 +709,8 @@ void Internal::analyze () {
   int uip = 0;                  // The first UIP literal.
 
   for (;;) {
-    analyze_reason (uip, reason, open);
+    // TODO: for analyzing extra constraints, we have to do "undo" during the trail traversal
+    analyze_reason (uip, reason, ext_reason, open);
     uip = 0;
     while (!uip) {
       assert (i > 0);
@@ -710,6 +720,7 @@ void Internal::analyze () {
     }
     if (!--open) break;
     reason = var (uip).reason;
+    ext_reason = var (uip).ext_reason;
     LOG (reason, "analyzing %d reason", uip);
   }
   LOG ("first UIP %d", uip);
@@ -775,6 +786,7 @@ void Internal::analyze () {
   clear_analyzed_levels ();
   clause.clear ();
   conflict = 0;
+  ext_conflict = 0;
 
   STOP (analyze);
 

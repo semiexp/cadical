@@ -123,6 +123,7 @@ void Internal::enlarge (int new_max_var) {
   LOG ("enlarge internal size from %zd to new size %zd", vsize, new_vsize);
   // Ordered in the size of allocated memory (larger block first).
   enlarge_only (wtab, 2*new_vsize);
+  enlarge_only (wtab_ext, 2*new_vsize);
   enlarge_only (vtab, new_vsize);
   enlarge_zero (parents, new_vsize);
   enlarge_only (links, new_vsize);
@@ -558,6 +559,8 @@ int Internal::local_search () {
   if (!max_var) return 0;
   if (!opts.walk) return 0;
   if (constraint.size ()) return 0;
+
+  if (!ext_constr.empty ()) return 0;
 
   int res = 0;
 

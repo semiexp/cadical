@@ -31,6 +31,7 @@ extern "C" {
 // Common 'C++' headers.
 
 #include <algorithm>
+#include <memory>
 #include <queue>
 #include <string>
 #include <vector>
@@ -58,6 +59,7 @@ extern "C" {
 #include "elim.hpp"
 #include "ema.hpp"
 #include "external.hpp"
+#include "extra_constraint.hpp"
 #include "file.hpp"
 #include "flags.hpp"
 #include "format.hpp"
@@ -177,7 +179,9 @@ struct Internal {
   vector<int64_t> ntab;         // number of one-sided occurrences table
   vector<Bins> big;             // binary implication graph
   vector<Watches> wtab;         // table of watches for all literals
-  Clause * conflict;            // set in 'propagation', reset in 'analyze'
+  vector<ExtWatches> wtab_ext;  // table of watches of extra constraints for all literals
+  Clause * conflict;            // clausal conflict. set in 'propagation', reset in 'analyze'
+  ExtraConstraint * ext_conflict;  // non-clausal conflict. set in 'propagation', reset in 'analyze'
   Clause * ignore;              // ignored during 'vivify_propagate'
   size_t propagated;            // next trail position to propagate
   size_t propagated2;           // next binary trail position to propagate
@@ -196,6 +200,8 @@ struct Internal {
   vector<int> minimized;        // removable or poison in 'minimize'
   vector<int> shrinkable;       // removable or poison in 'shrink'
   Reap reap;                    // radix heap for shrink
+
+  std::vector<std::unique_ptr<ExtraConstraint>> ext_constr;  // extra constraints
 
   vector<int> probes;           // remaining scheduled probes
   vector<Level> control;        // 'level + 1 == control.size ()'
@@ -336,6 +342,7 @@ struct Internal {
   Occs & occs (int lit)       { return otab[vlit (lit)]; }
   int64_t & noccs (int lit)   { return ntab[vlit (lit)]; }
   Watches & watches (int lit) { return wtab[vlit (lit)]; }
+  ExtWatches & ext_watches (int lit) { return wtab_ext[vlit (lit)]; }
 
   // Variable bumping through exponential VSIDS (EVSIDS) as in MiniSAT.
   //
@@ -526,6 +533,7 @@ struct Internal {
   //
   int assignment_level (int lit, Clause*);
   void search_assign (int lit, Clause *);
+  void search_assign_ext (int lit, ExtraConstraint *);
   void search_assign_driving (int lit, Clause * reason);
   void search_assume_decision (int decision);
   void assign_unit (int lit);
@@ -557,7 +565,7 @@ struct Internal {
   void bump_also_reason_literals (int lit, int limit);
   void bump_also_all_reason_literals ();
   void analyze_literal (int lit, int & open);
-  void analyze_reason (int lit, Clause *, int & open);
+  void analyze_reason (int lit, Clause *, ExtraConstraint * ext_reason, int & open);
   Clause * new_driving_clause (const int glue, int & jump);
   int find_conflict_level (int & forced);
   int determine_actual_backtrack_level (int jump);
@@ -709,6 +717,9 @@ struct Internal {
   // Transitive reduction of binary implication graph in 'transred.cpp'
   //
   void transred ();
+
+  // Add an external constraint defined in `extra_constraint.hpp`
+  bool add_extra(std::unique_ptr<ExtraConstraint>&& constr, const std::vector<int>& need_watch);
 
   // We monitor the maximum size and glue of clauses during 'reduce' and
   // thus can predict if a redundant extended clause is likely to be kept in

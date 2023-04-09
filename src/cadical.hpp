@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace CaDiCaL {
@@ -197,6 +198,8 @@ class Terminator;
 class ClauseIterator;
 class WitnessIterator;
 
+class ExtraConstraint;
+
 /*------------------------------------------------------------------------*/
 
 class Solver {
@@ -224,6 +227,8 @@ public:
   //   if (!lit) ensure (UNKNOWN)       // and thus READY
   //
   void add (int lit);
+
+  void add_extra (std::unique_ptr<ExtraConstraint>&& constr);
 
   // Assume valid non zero literal for next call to 'solve'.  These
   // assumptions are reset after the call to 'solve' as well as after

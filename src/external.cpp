@@ -143,6 +143,21 @@ void External::add (int elit) {
   internal->add_original_lit (ilit);
 }
 
+void External::add_extra (std::unique_ptr<ExtraConstraint>&& constr) {
+  std::vector<int> need_watch;
+
+  if (!constr->initialize(*internal, need_watch)) {
+    // TODO
+    throw 42;
+  }
+
+  for (int lit : need_watch) {
+    freeze(internal->externalize(lit));
+  }
+
+  internal->add_extra(std::move(constr), need_watch);
+}
+
 void External::assume (int elit) {
   assert (elit);
   reset_extended ();

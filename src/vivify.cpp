@@ -98,7 +98,7 @@ bool Internal::vivify_propagate () {
         if (b < 0) conflict = w.clause;                 // but continue
         else vivify_assign (w.blit, w.clause);
       }
-    } else if (!conflict && propagated != trail.size ()) {
+    } else if (!conflict && !ext_conflict && propagated != trail.size ()) {
       const int lit = -trail[propagated++];
       LOG ("vivify propagating %d over large clauses", -lit);
       Watches & ws = watches (lit);
@@ -162,7 +162,7 @@ bool Internal::vivify_propagate () {
   stats.propagations.vivify += delta;
   if (conflict) LOG (conflict, "conflict");
   STOP (propagate);
-  return !conflict;
+  return !conflict && !ext_conflict;
 }
 
 /*------------------------------------------------------------------------*/
@@ -734,7 +734,7 @@ void Internal::vivify_clause (Vivifier & vivifier, Clause * c) {
           clear_analyzed_literals ();
 
           backtrack (level - 1);
-          assert (!conflict);
+          assert (!conflict && !ext_conflict);
 
           break;
         }

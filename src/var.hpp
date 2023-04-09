@@ -15,6 +15,7 @@ struct Var {
   int level;         // decision level
   int trail;         // trail height at assignment
   Clause * reason;   // implication graph edge during search
+  ExtraConstraint * ext_reason;
 };
 
 }

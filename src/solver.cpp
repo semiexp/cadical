@@ -536,6 +536,15 @@ void Solver::add (int lit) {
   LOG_API_CALL_END ("add", lit);
 }
 
+void Solver::add_extra (std::unique_ptr<ExtraConstraint>&& constr) {
+  TRACE ("add_extra");
+  REQUIRE_VALID_STATE ();
+  transition_to_unknown_state ();
+  external->add_extra (std::move(constr));
+  STATE (UNKNOWN);
+  LOG_API_CALL_END ("add_extra");
+}
+
 void Solver::constrain (int lit) {
   TRACE ("constrain", lit);
   REQUIRE_VALID_STATE ();

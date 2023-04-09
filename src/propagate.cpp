@@ -68,6 +68,49 @@ inline void Internal::search_assign (int lit, Clause * reason) {
   v.level = lit_level;
   v.trail = (int) trail.size ();
   v.reason = reason;
+  v.ext_reason = nullptr;
+  if (!lit_level) learn_unit_clause (lit);  // increases 'stats.fixed'
+  const signed char tmp = sign (lit);
+  vals[idx] = tmp;
+  vals[-idx] = -tmp;
+  assert (val (lit) > 0);
+  assert (val (-lit) < 0);
+  if (!searching_lucky_phases)
+    phases.saved[idx] = tmp;                // phase saving during search
+  trail.push_back (lit);
+#ifdef LOGGING
+  if (!lit_level) LOG ("root-level unit assign %d @ 0", lit);
+  else LOG (reason, "search assign %d @ %d", lit, lit_level);
+#endif
+
+  if (watching ()) {
+    const Watches & ws = watches (-lit);
+    if (!ws.empty ()) {
+      const Watch & w = ws[0];
+      __builtin_prefetch (&w, 0, 1);
+    }
+  }
+}
+
+void Internal::search_assign_ext (int lit, ExtraConstraint * ext_reason) {
+
+  if (level) require_mode (SEARCH);
+
+  const int idx = vidx (lit);
+  assert (!vals[idx]);
+  assert (!flags (idx).eliminated ());
+  Var & v = var (idx);
+  assert (!opts.chrono);  // TODO: support chronological backtracking
+  int lit_level = level;
+  if (!lit_level) {
+    search_assign (lit, nullptr);
+    return;
+  }
+
+  v.level = lit_level;
+  v.trail = (int) trail.size ();
+  v.reason = nullptr;
+  v.ext_reason = ext_reason;
   if (!lit_level) learn_unit_clause (lit);  // increases 'stats.fixed'
   const signed char tmp = sign (lit);
   vals[idx] = tmp;
@@ -152,12 +195,13 @@ bool Internal::propagate () {
   //
   int64_t before = propagated;
 
-  while (!conflict && propagated != trail.size ()) {
+  while (!conflict && !ext_conflict && propagated != trail.size ()) {
 
     const int lit = -trail[propagated++];
     LOG ("propagating %d", -lit);
     Watches & ws = watches (lit);
 
+    // Propagate clausal constraints (clauses)
     const const_watch_iterator eow = ws.end ();
     watch_iterator j = ws.begin ();
     const_watch_iterator i = j;
@@ -347,11 +391,22 @@ bool Internal::propagate () {
 
       ws.resize (j - ws.begin ());
     }
+
+    // Propagate extra constraints.
+    // We note that the decided literal is `-lit`, not `lit`
+    ExtWatches& ext_ws = ext_watches (-lit);
+    for (ExtraConstraint* ext : ext_ws) {
+      if (!ext->propagate(*this, -lit)) {
+        // conflict detected
+        ext_conflict = ext;
+        break;
+      }
+    }
   }
 
   if (searching_lucky_phases) {
 
-    if (conflict)
+    if (conflict || ext_conflict)
       LOG (conflict, "ignoring lucky conflict");
 
   } else {
@@ -360,7 +415,7 @@ bool Internal::propagate () {
     //
     stats.propagations.search += propagated - before;
 
-    if (!conflict) no_conflict_until = propagated;
+    if (!conflict && !ext_conflict) no_conflict_until = propagated;
     else {
 
       if (stable) stats.stabconflicts++;
@@ -376,7 +431,7 @@ bool Internal::propagate () {
 
   STOP (propagate);
 
-  return !conflict;
+  return !conflict && !ext_conflict;
 }
 
 }
