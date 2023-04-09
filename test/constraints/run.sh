@@ -37,7 +37,7 @@ cecho "API testing in '$CADICALBUILD'"
 cecho "---------------------------------------------------------"
 cecho -n "$NORMAL"
 
-make -C $CADICALBUILD
+make -C $CADICALBUILD -j15
 res=$?
 [ $res = 0 ] || exit $res
 
