@@ -77,34 +77,193 @@ private:
   std::vector<int> assignment_stack_;  // for debug
 };
 
+// The same semantics as `ExtClause`, but this propagets "lazily":
+// values are recognized only after being notified by `propagate`.
+class LazyExtClause : public ExtraConstraint {
+public:
+  LazyExtClause(const std::vector<int>& elits) :
+    elits_(elits),
+    n_undet_(elits.size()),
+    n_sat_(0),
+    prop_fail_(0),
+    is_assigned_(elits.size(), false) {}
+
+  bool initialize(Internal& solver, std::vector<int>& need_watch) override {
+    for (int elit : elits_) {
+      int lit = solver.external->internalize(elit);
+      lits_.push_back(lit);
+      need_watch.push_back(-lit);
+      need_watch.push_back(lit);
+    }
+    return true;
+  }
+
+  bool propagate(Internal& solver, int lit) override {
+    for (int l : assignment_stack_) {
+      assert(l != lit && l != -lit);
+    }
+
+    assignment_stack_.push_back(lit);
+    int idx = literal_index(lit);
+    if (idx >= 0) {
+      ++n_sat_;
+      assert(!is_assigned_[idx]);
+      is_assigned_[idx] = true;
+    } else {
+      assert(!is_assigned_[~idx]);
+      is_assigned_[~idx] = true;
+    }
+
+    assert(n_undet_ > 0);
+    --n_undet_;
+
+    if (n_sat_ > 0) {
+      return true;
+    }
+
+    prop_fail_ = 0;
+
+    if (n_undet_ == 0) {
+      return false;
+    } else if (n_undet_ == 1) {
+      int p = 0;
+      for (size_t i = 0; i < lits_.size(); ++i) {
+        if (!is_assigned_[i]) {
+          assert(p == 0);
+          p = lits_[i];
+        }
+      }
+      assert(p != 0);
+
+      // Even in "lazy" propagators like this, we should check the value of
+      // the literal to be assigned, because `search_assign_ext` expects that
+      // the given literal is not assigned yet. If this assignment fails
+      // because the literal is already set to false, we should also include
+      // the literal to the reason, so we memorize it (`prop_fail_`).
+      signed char v = solver.val(p);
+      if (v == 1) {
+        return true;
+      } else if (v == 0) {
+        solver.search_assign_ext(p, this);
+        return true;
+      } else {
+        prop_fail_ = p;
+        return false;
+      }
+    } else {
+      return true;
+    }
+  }
+
+  std::vector<int> calc_reason(Internal& solver, int lit) override {
+    assert(n_sat_ == 0);
+    assert(n_undet_ <= 1);
+
+    std::vector<int> ret;
+
+    if (n_undet_ == 0) {
+      assert(lit == 0);
+
+      for (int l : lits_) {
+        ret.push_back(-l);
+      }
+    } else {
+      if (prop_fail_ == 0) {
+        assert(lit != 0);
+      } else {
+        assert(lit == 0);
+        ret.push_back(-prop_fail_);
+      }
+      for (size_t i = 0; i < lits_.size(); ++i) {
+        if (is_assigned_[i]) {
+          ret.push_back(-lits_[i]);
+        }
+      }
+    }
+
+    for (int l : ret) {
+      assert(solver.val_analyze(l) == 1);
+    }
+
+    return ret;
+  }
+
+  void undo(Internal&, int lit) override {
+    assert(!assignment_stack_.empty());
+    assert(assignment_stack_.back() == lit);
+    assignment_stack_.pop_back();
+
+    int idx = literal_index(lit);
+    if (idx >= 0) {
+      assert(n_sat_ > 0);
+      --n_sat_;
+      assert(is_assigned_[idx]);
+      is_assigned_[idx] = false;
+    } else {
+      assert(is_assigned_[~idx]);
+      is_assigned_[~idx] = false;
+    }
+
+    ++n_undet_;
+    prop_fail_ = 0;
+  }
+
+private:
+  int literal_index(int lit) const {
+    for (int i = 0; i < (int)lits_.size(); ++i) {
+      if (lits_[i] == lit) {
+        return i;
+      } else if (lits_[i] == -lit) {
+        return ~i;
+      }
+    }
+    assert(false);
+  }
+
+  std::vector<int> elits_;
+  std::vector<int> lits_;
+  int n_undet_, n_sat_, prop_fail_;
+
+  std::vector<int> assignment_stack_;
+  std::vector<bool> is_assigned_;
+};
+
 }
 
 namespace {
 
 void run_check(const std::vector<std::vector<int>>& clauses, bool is_sat) {
-  CaDiCaL::Solver solver;
-  solver.set("chrono", 0);
+  for (bool use_lazy : {false, true}) {
+    CaDiCaL::Solver solver;
+    solver.set("chrono", 0);
 
-  for (const std::vector<int>& clause : clauses) {
-    solver.add_extra(std::make_unique<CaDiCaL::ExtClause>(clause));
-  }
-
-  int res = solver.solve();
-  if (is_sat) {
-    assert(res == 10);
-
-    for (const std::vector<int>& clause : clauses) {
-      bool is_sat = false;
-      for (int lit : clause) {
-        if (solver.val(lit) > 0) {
-          is_sat = true;
-          break;
-        }
+    if (use_lazy) {
+      for (const std::vector<int>& clause : clauses) {
+        solver.add_extra(std::make_unique<CaDiCaL::LazyExtClause>(clause));
       }
-      assert(is_sat);
+    } else {
+      for (const std::vector<int>& clause : clauses) {
+        solver.add_extra(std::make_unique<CaDiCaL::ExtClause>(clause));
+      }
     }
-  } else {
-    assert(res == 20);
+
+    int res = solver.solve();
+    if (is_sat) {
+      assert(res == 10);
+
+      for (const std::vector<int>& clause : clauses) {
+        bool is_sat = false;
+        for (int lit : clause) {
+          if (solver.val(lit) > 0) {
+            is_sat = true;
+            break;
+          }
+        }
+        assert(is_sat);
+      }
+    } else {
+      assert(res == 20);
+    }
   }
 }
 
@@ -113,7 +272,9 @@ void compare_large_sat(int seed, int nvar) {
 
   CaDiCaL::Solver solver;
   CaDiCaL::Solver ext_solver;
+  CaDiCaL::Solver lazy_ext_solver;
   ext_solver.set("chrono", 0);
+  lazy_ext_solver.set("chrono", 0);
 
   for (;;) {
     std::set<int> vars;
@@ -139,6 +300,10 @@ void compare_large_sat(int seed, int nvar) {
     ext_solver.add_extra(std::make_unique<CaDiCaL::ExtClause>(clause));
     int res_ext_solver = ext_solver.solve();
     assert(res_solver == res_ext_solver);
+
+    lazy_ext_solver.add_extra(std::make_unique<CaDiCaL::LazyExtClause>(clause));
+    int res_lazy_ext_solver = lazy_ext_solver.solve();
+    assert(res_solver == res_lazy_ext_solver);
 
     if (res_solver == 20) {
       break;
