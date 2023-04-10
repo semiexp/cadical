@@ -25,7 +25,7 @@ public:
   // This method should NOT update watches of related literals by itself,
   // because these literals are constrained in an unpredictable way to
   // the preprocessor, thus should be "frozen".
-  virtual bool initialize(Internal& solver, std::vector<int>& need_watch) = 0;
+  virtual bool initialize(Internal& solver) = 0;
 
   virtual bool propagate(Internal& solver, int lit) = 0;
 

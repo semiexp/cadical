@@ -12,12 +12,27 @@ class ExtClause : public ExtraConstraint {
 public:
   ExtClause(const std::vector<int>& elits) : elits_(elits) {}
 
-  bool initialize(Internal& solver, std::vector<int>& need_watch) override {
+  bool initialize(Internal& solver) override {
     for (int elit : elits_) {
       int lit = solver.external->internalize(elit);
+      solver.require_extra_watch(-lit, this);
       lits_.push_back(lit);
-      need_watch.push_back(-lit);
     }
+
+    std::vector<int> prop_list;
+    for (int lit : lits_) {
+      signed char v = solver.val(lit);
+      if (v == -1) {
+        prop_list.push_back(-lit);
+      }
+    }
+
+    for (int lit : prop_list) {
+      if (!propagate(solver, lit)) {
+        return false;
+      }
+    }
+
     return true;
   }
 
@@ -88,13 +103,34 @@ public:
     prop_fail_(0),
     is_assigned_(elits.size(), false) {}
 
-  bool initialize(Internal& solver, std::vector<int>& need_watch) override {
+  bool initialize(Internal& solver) override {
     for (int elit : elits_) {
       int lit = solver.external->internalize(elit);
       lits_.push_back(lit);
-      need_watch.push_back(-lit);
-      need_watch.push_back(lit);
+      solver.require_extra_watch(-lit, this);
+      solver.require_extra_watch(lit, this);
     }
+
+    // We first collect the list of literals which have already been assigned
+    // for calling `propagate`.
+    // We should NOT call `propagate` immediately after checking values, because
+    // this may result in calling `propagate` for literals decided in `propagate` again.
+    std::vector<int> prop_list;
+    for (int lit : lits_) {
+      signed char v = solver.val(lit);
+      if (v == 1) {
+        prop_list.push_back(lit);
+      } else if (v == -1) {
+        prop_list.push_back(-lit);
+      }
+    }
+
+    for (int lit : prop_list) {
+      if (!propagate(solver, lit)) {
+        return false;
+      }
+    }
+
     return true;
   }
 
@@ -311,9 +347,50 @@ void compare_large_sat(int seed, int nvar) {
   }
 }
 
+void test_propagate_on_init() {
+  for (bool use_lazy : {false, true}) {
+    {
+      CaDiCaL::Solver solver;
+      solver.set("chrono", 0);
+
+      solver.add(1); solver.add(0);
+      solver.add(2); solver.add(0);
+
+      if (use_lazy) {
+        solver.add_extra(std::make_unique<CaDiCaL::LazyExtClause>(std::vector<int>{-1, -2}));
+      } else {
+        solver.add_extra(std::make_unique<CaDiCaL::ExtClause>(std::vector<int>{-1, -2}));
+      }
+      // TODO: ensure that conflict is detected at this timing before calling `solve()`
+
+      assert(solver.solve() == 20);
+    }
+
+    {
+      CaDiCaL::Solver solver;
+      solver.set("chrono", 0);
+
+      solver.add(1); solver.add(0);
+      solver.add(2); solver.add(0);
+
+      if (use_lazy) {
+        solver.add_extra(std::make_unique<CaDiCaL::LazyExtClause>(std::vector<int>{-1, -2, -3}));
+      } else {
+        solver.add_extra(std::make_unique<CaDiCaL::ExtClause>(std::vector<int>{-1, -2, -3}));
+      }
+      // TODO: ensure that val(3) is decided at this timing before calling `solve()`
+
+      assert(solver.solve() == 10);
+      assert(solver.val(3) < 0);
+    }
+  }
+}
+
 }
 
 int main() {
+  test_propagate_on_init();
+
   run_check({
     {1, 2},
     {1, -2},

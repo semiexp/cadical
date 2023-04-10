@@ -721,8 +721,13 @@ struct Internal {
   //
   void transred ();
 
-  // Add an external constraint defined in `extra_constraint.hpp`
-  bool add_extra(std::unique_ptr<ExtraConstraint>&& constr, const std::vector<int>& need_watch);
+  // Add an external constraint.
+  void add_extra(std::unique_ptr<ExtraConstraint>&& constr);
+
+  // Register `constr` to the extra constraints watch of `lit`.
+  // This should be called for all related literals `lit` at the beginning
+  // of `ExtraConstraint::initialize`.
+  void require_extra_watch(int lit, ExtraConstraint* constr);
 
   // We monitor the maximum size and glue of clauses during 'reduce' and
   // thus can predict if a redundant extended clause is likely to be kept in
