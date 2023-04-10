@@ -16,6 +16,8 @@ void Internal::add_extra(std::unique_ptr<ExtraConstraint>&& constr) {
     return;
   }
 
+  if (unsat) return;
+
   if (propagate ()) return;
   LOG ("propagation of an extra constraint results in conflict");
   learn_empty_clause();
