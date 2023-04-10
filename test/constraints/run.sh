@@ -83,10 +83,12 @@ run () {
     die "can not find '$tests.c' nor '$tests.cpp'"
   fi
   name=$CADICALBUILD/test-constraints-$1
-  rm -f $name.log $name.o $name
+  common_name=$CADICALBUILD/test-constraints-common
+  rm -f $name.log $name.o common.o $name
   status=0
   cmd $COMPILE$language -o $name.o -c $src
-  cmd $COMPILE -o $name $name.o -L$CADICALBUILD -lcadical
+  cmd $COMPILE$language -o $common_name.o -c $tests/common.cpp
+  cmd $COMPILE -o $name $name.o $common_name.o -L$CADICALBUILD -lcadical
   cmd $name
   if test $status = 0
   then
@@ -101,6 +103,7 @@ run () {
 #--------------------------------------------------------------------------#
 
 run clause
+run subgraph_connectivity
 
 #--------------------------------------------------------------------------#
 
