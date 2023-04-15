@@ -11,12 +11,12 @@ void Internal::add_extra(std::unique_ptr<ExtraConstraint>&& constr) {
   ext_constr.push_back(std::move(constr));
   ExtraConstraint* constr_ptr = ext_constr.back().get();
 
+  if (unsat) return;
+
   if (!constr_ptr->initialize(*this)) {
     learn_empty_clause();
     return;
   }
-
-  if (unsat) return;
 
   if (propagate ()) return;
   LOG ("propagation of an extra constraint results in conflict");
